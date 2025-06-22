@@ -22,8 +22,7 @@
         text-align: left;
         border-collapse: collapse;
       }
-      td,
-      th {
+      td, th {
         padding: 8px;
         border: 1px solid #ddd;
       }
@@ -55,15 +54,25 @@
       <table>
         <thead>
           <tr>
-            {{items_header}}
+            <th>Item Name</th>
+            <th>Qty</th>
+            <th>Price</th>
           </tr>
         </thead>
         <tbody>
-          {{items}}
+          {{#each items}}
+          <tr>
+            <td>{{name}}</td>
+            <td>{{quantity}}</td>
+            <td>${{price}}</td>
+          </tr>
+          {{/each}}
         </tbody>
       </table>
 
+      {{#if tax}}
       <h3 class="total">Tax: ${{tax}}</h3>
+      {{/if}}
       <h2 class="total">Total: ${{total}}</h2>
     </div>
   </body>

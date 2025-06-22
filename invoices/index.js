@@ -1,12 +1,15 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-app.use(express.json());
-app.use(cors());
 const { v4: uuidv4 } = require("uuid");
 const AWS = require("aws-sdk");
 const { generatePDF } = require("./GeneratePDF");
-require('dotenv').config();
+const Joi = require("joi");
+require("dotenv").config();
+const fs = require("fs");
+
+app.use(express.json());
+app.use(cors());
 
 // AWS DynamoDB Configuration
 AWS.config.update({
@@ -16,175 +19,139 @@ AWS.config.update({
 });
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
+// Joi validation schema
+const itemSchema = Joi.object({
+  name: Joi.string().required(),
+  quantity: Joi.number().integer().min(1).required(),
+  price: Joi.number().precision(2).min(0).required(),
+});
+
+const invoiceSchema = Joi.object({
+  invoice_id: Joi.string().optional(), // Optional because you generate it server-side
+  email: Joi.string().email().required(),
+  phone: Joi.string().optional(),
+  name: Joi.string().required(),
+  items: Joi.array().items(itemSchema).min(1).required(),
+  tax: Joi.number().precision(2).min(0).required(),
+  total: Joi.number().precision(2).min(0).required(),
+  status: Joi.string().valid("pending", "sent", "paid").optional(),
+  created_at: Joi.string().isoDate().optional(),
+});
+
+
+const invoiceUpdateSchema = Joi.object({
+  email: Joi.string().email(),
+  phone: Joi.string(),
+  name: Joi.string(),
+  items: Joi.array().items(
+    Joi.object({
+      name: Joi.string().required(),
+      quantity: Joi.number().required(),
+      price: Joi.number().required(),
+    })
+  ),
+  tax: Joi.number(),
+  total: Joi.number(),
+  status: Joi.string().valid("pending", "paid", "cancelled"),
+}).min(1); // At least one field must be present
+
+
+// Validation update function
+function validateUpdateInvoice(invoice) {
+  const { error } = invoiceUpdateSchema.validate(invoice, { abortEarly: false });
+  if (error) {
+    return error.details.map((detail) => detail.message);
+  }
+  return [];
+}
+
+// Validation function
+function validateInvoice(invoice) {
+  const { error } = invoiceSchema.validate(invoice, { abortEarly: false });
+  if (error) {
+    return error.details.map((detail) => detail.message);
+  }
+  return [];
+}
+
+// Function to get an invoice by ID
+async function getInvoiceById(invoiceId) {
+  const params = {
+    TableName: "Billify",
+    Key: {
+      invoice_id: invoiceId,
+    },
+  };
+  try {
+    const data = await dynamoDB.get(params).promise();
+    return data.Item;
+  } catch (error) {
+    console.error("Error fetching invoice:", error);
+    throw new Error("Could not fetch invoice");
+  }
+}
+
+// Create invoice
 app.post("/api/invoices/create", async (req, res) => {
   console.log("Create invoice request received");
-  const {
-    invoice_id,
-    email,
-    phone,
-    items,
-    tax,
-    total,
-    status,
-    created_at,
-    ...data
-  } = req.body;
+  const { email, phone, name, items, tax, total } = req.body;
+
   const newInvoice = {
     invoice_id: uuidv4(),
     email,
     phone,
-    items: items,
+    name,
+    items,
     tax,
     total,
     status: "pending",
     created_at: new Date().toISOString(),
-    data: data,
   };
+
   const errors = validateInvoice(newInvoice);
-  if (errors.length) {
+  if (errors.length > 0) {
     return res.status(400).json({ errors });
   }
+
   const params = {
     TableName: "Billify",
     Item: newInvoice,
   };
+
   try {
     await dynamoDB.put(params).promise();
     return res.status(201).json({
       message: "Invoice created successfully",
-      invoice_id: newInvoice.id,
+      invoice_id: newInvoice.invoice_id,
     });
   } catch (error) {
+    console.error("Error saving invoice:", error);
     return res.status(500).json({ error: error.message });
   }
 });
 
-app.put("/api/invoices/:id", async (req, res) => {
-  console.log("Update invoice request received");
-  const invoiceId = req.params.id;
-  const {
-    invoice_id,
-    email,
-    phone,
-    items,
-    tax,
-    total,
-    status,
-    created_at,
-    ...data
-  } = req.body;
-
-  // Prepare the update expression and attribute values
-  let updateExpression = "SET";
-  let expressionAttributeValues = {};
-
-  // Dynamically add fields to update based on request body
-  if (email) {
-    updateExpression += " #email = :email";
-    expressionAttributeValues[":email"] = email;
-  }
-  if (phone) {
-    if (updateExpression !== "SET") updateExpression += ",";
-    updateExpression += " #phone = :phone";
-    expressionAttributeValues[":phone"] = phone;
-  }
-  if (items) {
-    if (updateExpression !== "SET") updateExpression += ",";
-    updateExpression += " #items = :items";
-    expressionAttributeValues[":items"] = items;
-  }
-  if (tax) {
-    if (updateExpression !== "SET") updateExpression += ",";
-    updateExpression += " #tax = :tax";
-    expressionAttributeValues[":tax"] = tax;
-  }
-  if (total) {
-    if (updateExpression !== "SET") updateExpression += ",";
-    updateExpression += " #total = :total";
-    expressionAttributeValues[":total"] = total;
-  }
-  if (status) {
-    if (updateExpression !== "SET") updateExpression += ",";
-    updateExpression += " #status = :status";
-    expressionAttributeValues[":status"] = status;
-  }
-  if (data) {
-    if (updateExpression !== "SET") updateExpression += ",";
-    updateExpression += " #data = :data";
-    expressionAttributeValues[":data"] = data;
-  }
-
-  // Define attribute names to handle reserved words (e.g., 'status')
-  const expressionAttributeNames = {
-    "#email": "email",
-    "#phone": "phone",
-    "#items": "items",
-    "#tax": "tax",
-    "#total": "total",
-    "#status": "status",
-    "#data": "data",
-  };
-
-  const params = {
-    TableName: "Billify",
-    Key: {
-      invoice_id: invoiceId, // The key of the invoice to update
-    },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeValues: expressionAttributeValues,
-    ExpressionAttributeNames: expressionAttributeNames,
-    ReturnValues: "ALL_NEW", // Return the updated item
-  };
-
+// Generate PDF for invoice
+app.get("/api/invoices/:id/pdf", async (req, res) => {
   try {
-    // Perform the update operation
-    const result = await dynamoDB.update(params).promise();
-    return res.status(200).json({
-      message: "Invoice updated successfully",
-      updatedInvoice: result.Attributes, // Return the updated item
+    const invoice = await getInvoiceById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+    const pdfBuffer = await generatePDF(invoice);
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": "inline; filename=invoice.pdf",
+      "Content-Length": pdfBuffer.length,
     });
+
+    res.end(pdfBuffer);
   } catch (error) {
-    console.error("Error updating invoice:", error);
-    return res.status(500).json({ error: error.message });
+    console.log("HEre", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post("/api/invoices/:id/send", (req, res) => {
-  console.log("PDF send request received");
-  const {
-    invoice_id,
-    email,
-    phone,
-    items,
-    tax,
-    total,
-    status,
-    created_at,
-    ...data
-  } = req.body;
-  const newInvoice = {
-    invoice_id: invoice_id.slice(-4),
-    email,
-    phone,
-    items: items,
-    tax,
-    total,
-    status,
-    created_at: new Date().toISOString(),
-    data: data,
-  };
-  const errors = validateInvoice(newInvoice);
-  if (errors.length) {
-    return res.status(400).json({ errors });
-  }
-  generatePDF(newInvoice).then((pdfPath) => {
-    console.log("PDF Generated:", pdfPath);
-  });
-  res.json({
-    message: `Invoice ${invoice_id} sent successfully!`,
-  });
-});
-
+// Get all invoices
 app.get("/api/invoices/all", async (req, res) => {
   console.log("Get all invoices request received");
   const params = {
@@ -192,76 +159,88 @@ app.get("/api/invoices/all", async (req, res) => {
   };
   try {
     const data = await dynamoDB.scan(params).promise();
-    return res.json(data);
+    return res.json(data.Items);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Error fetching invoices:", error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
+// Get invoice by ID
 app.get("/api/invoices/:id", async (req, res) => {
   console.log(`Get invoice of ${req.params.id} request received`);
-  const params = {
-    TableName: "Billify",
-    Key: {
-      invoice_id: req.params.id,
-    },
-  };
   try {
-    const data = await dynamoDB.get(params).promise();
-    if (!data.Item) {
+    const invoice = await getInvoiceById(req.params.id);
+    if (!invoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
-    return res.json(data.Item);
+    return res.json(invoice);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 });
 
-app.listen(3001, () => {
-  console.log("Server running on port 3001");
-});
+// Update invoice by ID
+app.put("/api/invoices/:id", async (req, res) => {
+  const invoiceId = req.params.id;
+  const updateData = req.body;
 
-const validateInvoice = (invoice) => {
-  const { id, email, phone, items, tax, total, status, created_at } = invoice;
-  let errors = [];
-
-  // 🔹 Validate required fields
-  if ((!email && !phone) || !items || !total) {
-    errors.push("Missing required fields: email or phone, items, total");
+  // Validate updateData against schema
+  const errors = validateUpdateInvoice(updateData);
+  if (errors.length) {
+    return res.status(400).json({ errors });
   }
 
-  // 🔹 Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (email && !emailRegex.test(email)) {
-    errors.push("Invalid email format");
+  // Prepare the update expression and attribute values for DynamoDB
+  const ExpressionAttributeNames = {};
+  const ExpressionAttributeValues = {};
+  const UpdateExpressionParts = [];
+
+  for (const key in updateData) {
+    if (key === "invoice_id") continue; // can't update primary key
+    UpdateExpressionParts.push(`#${key} = :${key}`);
+    ExpressionAttributeNames[`#${key}`] = key;
+    ExpressionAttributeValues[`:${key}`] = updateData[key];
   }
 
-  // Validate Phone number format XXXXXXXXXX
-  const validatePhoneNumber = (phone) => {
-    const phoneRegex = /^\d{10}$/;
-    return phoneRegex.test(phone);
+  const params = {
+    TableName: "Billify",
+    Key: { invoice_id: invoiceId },
+    UpdateExpression: "SET " + UpdateExpressionParts.join(", "),
+    ExpressionAttributeNames,
+    ExpressionAttributeValues,
+    ReturnValues: "ALL_NEW",
   };
 
-  // Validate items is present and not 0
-  if (!Array.isArray(items) || items.length === 0) {
-    errors.push("Items must be a non-empty array");
+  try {
+    const result = await dynamoDB.update(params).promise();
+    res.json({
+      message: "Invoice updated successfully",
+      updatedInvoice: result.Attributes,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
+});
 
-  // Validate total is a positive
-  if (isNaN(total) || total <= 0) {
-    errors.push("Total must be a positive number");
+// Delete invoice by ID
+app.delete("/api/invoices/:id", async (req, res) => {
+  const invoiceId = req.params.id;
+
+  const params = {
+    TableName: "Billify",
+    Key: { invoice_id: invoiceId },
+  };
+
+  try {
+    await dynamoDB.delete(params).promise();
+    res.json({ message: `Invoice ${invoiceId} deleted successfully.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
+});
 
-  // Validate tax is a number greater than or equal to 0
-  if (isNaN(tax) || tax < 0) {
-    errors.push("Tax must be a number greater than or equal to 0");
-  }
-
-  // Validate status is one of "pending", "sent", or "paid"
-  const validStatuses = ["pending", "sent", "paid"];
-  if (status && !validStatuses.includes(status)) {
-    errors.push(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
-  }
-
-  return errors;
-};
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
