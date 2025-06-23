@@ -3,7 +3,7 @@ import InvoiceList from "../components/InvoiceList";
 import InvoiceForm from "../components/InvoiceForm";
 import { useInvoiceContext, InvoiceProvider } from "../context/InvoiceContext";
 import { Link } from "react-router-dom";
-import Footer from "../components/footer";
+import Footer from "../components/Footer";
 function Demo() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
