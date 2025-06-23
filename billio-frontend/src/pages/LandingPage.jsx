@@ -1,7 +1,7 @@
 import React from "react";
 import styles from "./LandingPage.module.css";
 import { Link } from "react-router-dom";
-import Footer from "../components/footer";
+import Footer from "../components/Footer";
 
 export default function LandingPage() {
   return (
