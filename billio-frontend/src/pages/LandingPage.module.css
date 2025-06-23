@@ -1,0 +1,86 @@
+.hero {
+  padding: 4rem 1rem;
+  background-color: #f8f9fa;
+  text-align: center;
+}
+
+.features,
+.technologies {
+  padding: 3rem 1rem;
+}
+
+.sectionTitle {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.imagePlaceholder {
+  width: 100%;
+  height: 300px;
+  background-color: #dee2e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #6c757d;
+  margin-bottom: 2rem;
+}
+
+/* LandingPage.module.css */
+.cta {
+  text-align: center;
+  padding: 60px 20px;
+  border-top: 1px solid #dee2e6;
+}
+
+.cta h2 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+.cta p {
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+}
+
+
+.section {
+  padding: 3rem 1rem;
+}
+
+.section p {
+  font-size: 1.1rem;
+  color: #444;
+}
+
+.howItWorks {
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.howItWorks h2 {
+  margin-bottom: 2rem;
+  font-weight: bold;
+}
+
+.step {
+  padding: 1rem;
+}
+
+.stepNumber {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #0d6efd;
+}
+
+.stepTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.stepDesc {
+  font-size: 1rem;
+  color: #555;
+}

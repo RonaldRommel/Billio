@@ -16,12 +16,17 @@ export const handler = async (event) => {
     const data = await docClient.send(new ScanCommand(params));
     const invoices = data?.Items || [];
 
-    console.log(`[INFO] ✅ Retrieved ${invoices.length} invoice(s) from DynamoDB`);
+    console.log(
+      `[INFO] ✅ Retrieved ${invoices.length} invoice(s) from DynamoDB`
+    );
 
     return {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
       },
       body: JSON.stringify({
         message: "Invoices fetched successfully",
