@@ -1,10 +1,10 @@
-# 🚀 Automated Invoice Generator (Work in Progress)
+# 🚀 Billio Invoice Generator (Work in Progress)
 
 ---
 
 ## 📌 Overview
 
-**Automated Invoice Generator** is a **serverless, lightweight invoicing tool** designed for small businesses to generate, store, and manage professional invoices **paperlessly**. It uses modern AWS services and lightweight libraries for a scalable, cost-effective solution.
+**Billio Invoice Generator** is a **serverless, lightweight invoicing tool** designed for small businesses to generate, store, and manage professional invoices **paperlessly**. It uses modern AWS services and lightweight libraries for a scalable, cost-effective solution.
 
 - Invoices securely stored in **AWS DynamoDB**
 - PDF invoice templates hosted on **AWS S3**
