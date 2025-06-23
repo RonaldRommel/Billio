@@ -94,7 +94,6 @@ function InvoiceForm() {
       total: parseFloat(total.toFixed(2)) || 0,
     };
     if (editingInvoice) {
-      console.log("Updating invoice with data:", invoiceData);
       updateInvoice(editingInvoice, invoiceData);
       setEditingInvoice(null);
     } else {
